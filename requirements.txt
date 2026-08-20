@@ -1,0 +1,6 @@
+Flask
+Flask-SocketIO
+pytchat
+requests
+gunicorn
+eventlet
