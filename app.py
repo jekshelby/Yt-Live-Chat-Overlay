@@ -1,16 +1,3 @@
-# from flask import Flask, render_template
-# from flask_socketio import SocketIO
-# import pytchat
-# import threading
-# import time
-# import requests
-# import re
-# import os
-
-from gevent import monkey
-monkey.patch_all()
-
-import os
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 import pytchat
@@ -18,11 +5,11 @@ import threading
 import time
 import requests
 import re
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-# socketio = SocketIO(app, cors_allowed_origins="*")
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Handle channel kamu
 CHANNEL_HANDLE = "@aceanthem2"
@@ -178,6 +165,7 @@ def index():
 #     socketio.run(app, host='127.0.0.1', port=5000)
 
 if __name__ == '__main__':
-    threading.Thread(target=fetch_chat, daemon=True).start()
-    port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    # Untuk local development
+    socketio.start_background_task(fetch_chat)
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
