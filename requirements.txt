@@ -1,6 +1,7 @@
 flask
 flask-socketio
-eventlet
-gunicorn
 pytchat
 requests
+gunicorn
+gevent
+gevent-websocket
