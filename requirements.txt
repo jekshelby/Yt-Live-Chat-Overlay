@@ -3,4 +3,5 @@ Flask-SocketIO
 pytchat
 requests
 gunicorn
-eventlet
+gevent
+gevent-websocket

@@ -1,3 +1,16 @@
+# from flask import Flask, render_template
+# from flask_socketio import SocketIO
+# import pytchat
+# import threading
+# import time
+# import requests
+# import re
+# import os
+
+from gevent import monkey
+monkey.patch_all()
+
+import os
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 import pytchat
@@ -5,11 +18,11 @@ import threading
 import time
 import requests
 import re
-import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, cors_allowed_origins="*")
+# socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Handle channel kamu
 CHANNEL_HANDLE = "@aceanthem2"
