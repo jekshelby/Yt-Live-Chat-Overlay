@@ -24,50 +24,33 @@ LIVE_RECHECK_INTERVAL = 5
 
 
 def get_live_video_id(handle):
-    """Mendeteksi Video ID live stream aktif."""
+    """Mendeteksi Video ID live stream aktif (hanya jika benar-benar sedang live)."""
     url = f"https://www.youtube.com/{handle}/live"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
     }
     try:
-        response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        response = requests.get(url, headers=headers, timeout=10)
         html = response.text
 
-        # Debug (bisa dihapus nanti)
-        print(f"[DEBUG] Status code: {response.status_code}, URL akhir: {response.url}")
-
-        # Cek apakah benar-benar live
-        is_live_now = (
-            '"isLiveNow":true' in html or
-            '"isLive":true' in html or
-            '"isLiveContent":true' in html
-        )
+        is_live_now = False
+        if '"isLiveNow":true' in html or '"isLive":true' in html:
+            is_live_now = True
 
         if not is_live_now:
-            print("[DEBUG] Tidak menemukan tanda isLiveNow/isLive")
             return None
 
-        # Cari videoId
-        match = re.search(r'"videoId":"([a-zA-Z0-9_-]{11})"', html)
+        match = re.search(r'\"videoId\":\"([a-zA-Z0-9_-]{11})\"', html)
         if match:
-            video_id = match.group(1)
-            print(f"[DEBUG] Ditemukan videoId: {video_id}")
-            return video_id
+            return match.group(1)
 
-        # Alternatif dari canonical
-        match_alt = re.search(r'canonical" href="https://www\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})"', html)
+        match_alt = re.search(r'\"canonical\" href=\"https://www.youtube.com/watch\?v=([a-zA-Z0-9_-]{11})\"', html)
         if match_alt:
-            video_id = match_alt.group(1)
-            print(f"[DEBUG] Ditemukan videoId (canonical): {video_id}")
-            return video_id
-
-        print("[DEBUG] isLive ditemukan tapi videoId tidak ketemu")
-        return None
-
+            return match_alt.group(1)
     except Exception as e:
         print(f"[!] Gagal mengecek status channel: {e}")
-        return None
+
+    return None
 
 
 def fetch_chat():
