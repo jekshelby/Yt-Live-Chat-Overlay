@@ -4,6 +4,7 @@ monkey.patch_all()
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 import pytchat
+import threading
 import time
 import requests
 import re
@@ -12,7 +13,7 @@ import os
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 
-# Wajib pakai gevent karena worker-nya GeventWebSocketWorker
+# Menggunakan gevent (lebih stabil & masih didukung)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Handle channel kamu
@@ -66,15 +67,15 @@ def fetch_chat():
         if should_check_live:
             latest_video_id = get_live_video_id(CHANNEL_HANDLE)
             last_live_check = now
+            if not is_live:
+                print(f"[*] Mencari siaran langsung aktif untuk {CHANNEL_HANDLE}...")
+
+        if not latest_video_id:
+            print(f"[!] Belum ada live stream aktif yang terdeteksi. Mencoba lagi dalam {STATUS_CHECK_INTERVAL} detik...")
+            time.sleep(STATUS_CHECK_INTERVAL)
+            continue
 
         if not is_live:
-            print(f"[*] Mencari siaran langsung aktif untuk {CHANNEL_HANDLE}...")
-
-            if not latest_video_id:
-                print(f"[!] Belum ada live stream aktif yang terdeteksi. Mencoba lagi dalam {STATUS_CHECK_INTERVAL} detik...")
-                time.sleep(STATUS_CHECK_INTERVAL)
-                continue
-
             try:
                 chat = pytchat.create(video_id=latest_video_id, interruptable=False)
                 if not chat.is_alive():
@@ -87,7 +88,6 @@ def fetch_chat():
                     "channel": CHANNEL_HANDLE,
                     "time": time.strftime('%Y-%m-%d %H:%M:%S')
                 })
-
                 current_video_id = latest_video_id
                 is_live = True
             except Exception as e:
@@ -103,7 +103,6 @@ def fetch_chat():
                 "channel": CHANNEL_HANDLE,
                 "time": time.strftime('%Y-%m-%d %H:%M:%S')
             })
-
             is_live = False
             current_video_id = None
             chat = None
@@ -147,7 +146,6 @@ def fetch_chat():
                 socketio.emit('new_chat', data)
 
             time.sleep(CHAT_POLL_INTERVAL)
-
         except Exception as e:
             print(f"[!] Terjadi error saat membaca chat: {e}. Menandai stream berhenti dan memantau ulang...")
             socketio.emit('stream_status', {
@@ -167,11 +165,9 @@ def index():
     return render_template('index.html')
 
 
-# PENTING: dijalankan saat di-import oleh Gunicorn (production)
+# Background task selalu dijalankan (baik local maupun production)
 socketio.start_background_task(fetch_chat)
 
-
 if __name__ == '__main__':
-    # Hanya untuk local development
-    port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
