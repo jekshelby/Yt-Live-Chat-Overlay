@@ -6,4 +6,3 @@ gunicorn
 gevent
 gevent-websocket
 packaging
-eventlet

@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()
+from gevent import monkey
+monkey.patch_all()
 
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -13,8 +13,8 @@ import os
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 
-# PENTING: async_mode diganti ke 'eventlet' agar cocok dengan worker-class eventlet di Gunicorn
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# Menggunakan gevent (lebih stabil & masih didukung)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Handle channel kamu
 CHANNEL_HANDLE = "@aceanthem2"
@@ -33,7 +33,6 @@ def get_live_video_id(handle):
         response = requests.get(url, headers=headers, timeout=10)
         html = response.text
 
-        # /live bisa tetap mengarah ke video lama. Pastikan benar-benar status live.
         is_live_now = False
         if '"isLiveNow":true' in html or '"isLive":true' in html:
             is_live_now = True
@@ -41,12 +40,10 @@ def get_live_video_id(handle):
         if not is_live_now:
             return None
 
-        # Cari pola videoId di dalam HTML live page YouTube
         match = re.search(r'\"videoId\":\"([a-zA-Z0-9_-]{11})\"', html)
         if match:
             return match.group(1)
 
-        # Pola alternatif tag canonical link
         match_alt = re.search(r'\"canonical\" href=\"https://www.youtube.com/watch\?v=([a-zA-Z0-9_-]{11})\"', html)
         if match_alt:
             return match_alt.group(1)
@@ -168,11 +165,9 @@ def index():
     return render_template('index.html')
 
 
-# Dijalankan otomatis baik di local dev maupun saat diimport oleh Gunicorn,
-# supaya background task fetch_chat() selalu aktif di production.
+# Background task selalu dijalankan (baik local maupun production)
 socketio.start_background_task(fetch_chat)
 
 if __name__ == '__main__':
-    # Untuk local development
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
