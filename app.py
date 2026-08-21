@@ -17,7 +17,7 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Handle channel kamu
-CHANNEL_HANDLE = "@Nafari126"
+CHANNEL_HANDLE = "@vanny.skuyyy"
 STATUS_CHECK_INTERVAL = 10
 CHAT_POLL_INTERVAL = 1
 LIVE_RECHECK_INTERVAL = 5
