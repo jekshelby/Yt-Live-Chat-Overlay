@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 import pytchat
@@ -9,14 +12,16 @@ import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-# socketio = SocketIO(app, cors_allowed_origins="*")
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+
+# PENTING: async_mode diganti ke 'eventlet' agar cocok dengan worker-class eventlet di Gunicorn
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Handle channel kamu
 CHANNEL_HANDLE = "@aceanthem2"
 STATUS_CHECK_INTERVAL = 10
 CHAT_POLL_INTERVAL = 1
 LIVE_RECHECK_INTERVAL = 5
+
 
 def get_live_video_id(handle):
     """Mendeteksi Video ID live stream aktif (hanya jika benar-benar sedang live)."""
@@ -40,13 +45,16 @@ def get_live_video_id(handle):
         match = re.search(r'\"videoId\":\"([a-zA-Z0-9_-]{11})\"', html)
         if match:
             return match.group(1)
+
         # Pola alternatif tag canonical link
         match_alt = re.search(r'\"canonical\" href=\"https://www.youtube.com/watch\?v=([a-zA-Z0-9_-]{11})\"', html)
         if match_alt:
             return match_alt.group(1)
     except Exception as e:
         print(f"[!] Gagal mengecek status channel: {e}")
+
     return None
+
 
 def fetch_chat():
     is_live = False
@@ -62,15 +70,15 @@ def fetch_chat():
         if should_check_live:
             latest_video_id = get_live_video_id(CHANNEL_HANDLE)
             last_live_check = now
+            if not is_live:
+                print(f"[*] Mencari siaran langsung aktif untuk {CHANNEL_HANDLE}...")
+
+        if not latest_video_id:
+            print(f"[!] Belum ada live stream aktif yang terdeteksi. Mencoba lagi dalam {STATUS_CHECK_INTERVAL} detik...")
+            time.sleep(STATUS_CHECK_INTERVAL)
+            continue
 
         if not is_live:
-            print(f"[*] Mencari siaran langsung aktif untuk {CHANNEL_HANDLE}...")
-
-            if not latest_video_id:
-                print(f"[!] Belum ada live stream aktif yang terdeteksi. Mencoba lagi dalam {STATUS_CHECK_INTERVAL} detik...")
-                time.sleep(STATUS_CHECK_INTERVAL)
-                continue
-
             try:
                 chat = pytchat.create(video_id=latest_video_id, interruptable=False)
                 if not chat.is_alive():
@@ -83,13 +91,12 @@ def fetch_chat():
                     "channel": CHANNEL_HANDLE,
                     "time": time.strftime('%Y-%m-%d %H:%M:%S')
                 })
-
                 current_video_id = latest_video_id
                 is_live = True
             except Exception as e:
                 print(f"[!] Gagal membuka live chat: {e}. Dianggap belum live, coba lagi...")
                 time.sleep(STATUS_CHECK_INTERVAL)
-            continue
+                continue
 
         if latest_video_id != current_video_id:
             print("[!] Live stream berhenti atau berpindah video. Kembali memantau...")
@@ -99,7 +106,6 @@ def fetch_chat():
                 "channel": CHANNEL_HANDLE,
                 "time": time.strftime('%Y-%m-%d %H:%M:%S')
             })
-
             is_live = False
             current_video_id = None
             chat = None
@@ -143,7 +149,6 @@ def fetch_chat():
                 socketio.emit('new_chat', data)
 
             time.sleep(CHAT_POLL_INTERVAL)
-
         except Exception as e:
             print(f"[!] Terjadi error saat membaca chat: {e}. Menandai stream berhenti dan memantau ulang...")
             socketio.emit('stream_status', {
@@ -157,16 +162,17 @@ def fetch_chat():
             chat = None
             time.sleep(STATUS_CHECK_INTERVAL)
 
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# if __name__ == '__main__':
-#     threading.Thread(target=fetch_chat, daemon=True).start()
-#     socketio.run(app, host='127.0.0.1', port=5000)
+
+# Dijalankan otomatis baik di local dev maupun saat diimport oleh Gunicorn,
+# supaya background task fetch_chat() selalu aktif di production.
+socketio.start_background_task(fetch_chat)
 
 if __name__ == '__main__':
     # Untuk local development
-    socketio.start_background_task(fetch_chat)
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
